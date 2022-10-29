@@ -1,3 +1,23 @@
+# Change log -----SekiroRong
+
+* Add Data Augmentation of Extract GT points
+
+* Add sparse pointpillar implementation
+
+```
+# You can modified the cmd by urself
+
+python tool/train.py config/sparse_pointpillars/*
+```
+
+-----------------------------------------------------------------
+
+
+
+
+
+
+
 <div align="center">
   <img src="resources/mmdet3d-logo.png" width="600"/>
   <div>&nbsp;</div>
