@@ -2052,4 +2052,46 @@ class RandomShiftScale(object):
         repr_str += f'(shift_scale={self.shift_scale}, '
         repr_str += f'aug_prob={self.aug_prob}) '
         return repr_str
+      
+      
+@PIPELINES.register_module()
+class Insurance(object):
+    """Random shift scale.
+
+    Different from the normal shift and scale function, it doesn't
+    directly shift or scale image. It can record the shift and scale
+    infos into loading pipelines. It's designed to be used with
+    AffineResize together.
+
+    Args:
+        shift_scale (tuple[float]): Shift and scale range.
+        aug_prob (float): The shifting and scaling probability.
+    """
+
+    def __init__(self, pos = [[1.,.0,.0,1.0]]):
+
+        self.pos = pos
+
+    def __call__(self, input_dict):
+        """Call function to record random shift and scale infos.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Results after random shift and scale, 'center', 'size'
+                and 'affine_aug' keys are added in the result dict.
+        """
+        point = input_dict['points'].tensor.numpy()
+        if len(point) == 0:
+            fixed_points = np.array(self.pos)
+        else:
+            fixed_points = np.vstack((point,np.array(self.pos)))
+        input_dict['points'] = LiDARPoints(torch.from_numpy(fixed_points), points_dim=4)
+        return input_dict
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(pos={self.pos}, '
+        return repr_str
 
