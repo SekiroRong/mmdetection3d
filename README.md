@@ -2,7 +2,7 @@
 
 * 2022.11.12
 
-Add Config of kitti version SST and FSD
+Add Config of kitti version SST and FSD, and their implements can be found on https://github.com/tusen-ai/SST
 
 * 2022.11.01
 
