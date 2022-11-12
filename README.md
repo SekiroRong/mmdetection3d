@@ -1,8 +1,16 @@
 # Change log -----SekiroRong
 
-* Add Data Augmentation of Extract GT points
+* 2022.11.12
 
-* Add sparse pointpillar implementation
+Add Config of kitti version SST and FSD
+
+* 2022.11.01
+
+Add Data Augmentation of Extract GT points
+
+* 2022.10.23
+
+Add sparse pointpillar implementation
 
 ```
 # You can modified the cmd by urself
