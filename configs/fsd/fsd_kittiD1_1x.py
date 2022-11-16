@@ -5,7 +5,7 @@ _base_ = [
 ]
 data_root = '/mnt/d/kitti/'
 
-seg_voxel_size = (0.16, 0.16, 0.4)
+seg_voxel_size = (0.16, 0.16, 0.27)
 point_cloud_range = [0, -39.68, -3, 69.12, 39.68, 1]
 class_names = ['Car', 'Pedestrian', 'Cyclist']
 num_classes = len(class_names)
@@ -40,7 +40,7 @@ segmentor = dict(
     backbone=dict(
         type='SimpleSparseUNet',
         in_channels=64,
-        sparse_shape=[32, 640, 640],
+        sparse_shape=[32, 496, 496],
         order=('conv', 'norm', 'act'),
         norm_cfg=dict(type='naiveSyncBN1d', eps=1e-3, momentum=0.01),
         base_channels=64,
@@ -273,9 +273,9 @@ model = dict(
     ),
     cluster_assigner=dict(
         cluster_voxel_size=dict(
-            Car=(0.3, 0.3, 6),
-            Cyclist=(0.2, 0.2, 6),
-            Pedestrian=(0.05, 0.05, 6),
+            Car=(0.3, 0.3, 4),
+            Cyclist=(0.2, 0.2, 4),
+            Pedestrian=(0.1, 0.1, 4),
         ),
         min_points=2,
         point_cloud_range=point_cloud_range,
@@ -344,6 +344,7 @@ test_pipeline = [
         load_dim=4,
         use_dim=4,
         file_client_args=file_client_args),
+    # dict(type='Insurance'),
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
@@ -378,7 +379,7 @@ log_config=dict(
 )
 custom_hooks = [
     # dict(type='DisableAugmentationHook', num_last_epochs=1, skip_type_keys=('ObjectSample', 'RandomFlip3D', 'GlobalRotScaleTrans')),
-    dict(type='EnableFSDDetectionHookIter', enable_after_iter=1, threshold_buffer=0.3, buffer_iter=2) 
+    dict(type='EnableFSDDetectionHookIter', enable_after_iter=4000, threshold_buffer=0.3, buffer_iter=8000) 
 ]
 
 optimizer = dict(
