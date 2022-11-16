@@ -22,7 +22,9 @@ Add sparse pointpillar implementation
 python tool/train.py config/sparse_pointpillars/*
 ```
 
-* Add Data Augmentation of PointRandomSample and PointsHeightFilter
+* 2022.10.7
+
+Add Data Augmentation of PointRandomSample and PointsHeightFilter
 
 -----------------------------------------------------------------
 
