@@ -1,5 +1,9 @@
 # Change log -----SekiroRong
 
+* 2022.11.16
+
+Redesigned config of SST and FSD for KITTI
+
 * 2022.11.12
 
 Add Config of kitti version SST and FSD, and their implements can be found on https://github.com/tusen-ai/SST
