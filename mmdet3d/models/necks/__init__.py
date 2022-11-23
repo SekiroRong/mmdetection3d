@@ -5,8 +5,10 @@ from .imvoxel_neck import IndoorImVoxelNeck, OutdoorImVoxelNeck
 from .pointnet2_fp_neck import PointNetFPNeck
 from .second_fpn import SECONDFPN
 from .view_transformer import LSSViewTransformer
+from .sparse_second_fpn import SparseSECONDFPN
+from .cp_fpn import CPFPN
 
 __all__ = [
     'FPN', 'SECONDFPN', 'OutdoorImVoxelNeck', 'IndoorImVoxelNeck',
-    'PointNetFPNeck', 'DLANeck', 'LSSViewTransformer'
+    'PointNetFPNeck', 'DLANeck', 'LSSViewTransformer', 'SparseSECONDFPN', 'CPFPN'
 ]

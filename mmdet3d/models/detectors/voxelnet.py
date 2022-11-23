@@ -9,6 +9,7 @@ from .. import builder
 from ..builder import DETECTORS
 from .single_stage import SingleStage3DDetector
 
+import time
 
 @DETECTORS.register_module()
 class VoxelNet(SingleStage3DDetector):
@@ -36,16 +37,70 @@ class VoxelNet(SingleStage3DDetector):
         self.voxel_layer = Voxelization(**voxel_layer)
         self.voxel_encoder = builder.build_voxel_encoder(voxel_encoder)
         self.middle_encoder = builder.build_middle_encoder(middle_encoder)
+        self.t_voxelize_all = []
+        self.t_voxel_encoder_all = []
+        self.t_middle_encoder_all = []
+        self.t_backbone_all = []
+        self.t_neck_all = []
+        self.t_bbox3d2result_all = []
+        self.t_extract_feat_all = []
+        self.t_bbox_head_all = []
+        self.t_get_bboxes_all = []
 
     def extract_feat(self, points, img_metas=None):
         """Extract features from points."""
+        torch.cuda.synchronize()
+        t0 = time.time()
         voxels, num_points, coors = self.voxelize(points)
-        voxel_features = self.voxel_encoder(voxels, num_points, coors)
-        batch_size = coors[-1, 0].item() + 1
+        torch.cuda.synchronize()
+        t1 = time.time()
+        # try:
+        #     voxels, num_points, coors = self.voxelize(points)
+        # except RuntimeError:
+        #     print(img_metas)
+
+        # print(voxels, num_points, coors) 
+        # voxels, num_points, coors = self.voxelize(points)
+        # voxel_features = self.voxel_encoder(voxels, num_points, coors)
+        voxel_features = self.voxel_encoder(voxels, coors)
+        torch.cuda.synchronize()
+        t2 = time.time()
+        if len(coors) == 0:
+            batch_size = 6
+        else:
+            batch_size = coors[-1, 0].item() + 1
         x = self.middle_encoder(voxel_features, coors, batch_size)
+        torch.cuda.synchronize()
+        t3 = time.time()
         x = self.backbone(x)
+        torch.cuda.synchronize()
+        t4 = time.time()
         if self.with_neck:
             x = self.neck(x)
+        torch.cuda.synchronize()
+        t5 = time.time()
+
+        t_voxelize = (t1-t0)*1000
+        t_voxel_encoder = (t2-t1)*1000
+        t_middle_encoder = (t3-t2)*1000
+        t_backbone = (t4-t3)*1000
+        t_neck = (t5-t4)*1000
+        print(' ')
+        print(' t_voxelize: ', t_voxelize)
+        print(' t_voxel_encoder: ', t_voxel_encoder)
+        print(' t_middle_encoder: ', t_middle_encoder)
+        print(' t_backbone: ', t_backbone)
+        print(' t_neck: ', t_neck)
+        self.t_voxelize_all.append(t_voxelize)
+        print('t_voxelize_mean: ', sum(self.t_voxelize_all)/len(self.t_voxelize_all))
+        self.t_voxel_encoder_all.append(t_voxel_encoder)
+        print('t_voxel_encoder_mean: ', sum(self.t_voxel_encoder_all)/len(self.t_voxel_encoder_all))
+        self.t_middle_encoder_all.append(t_middle_encoder)
+        print('t_middle_encoder_mean: ', sum(self.t_middle_encoder_all)/len(self.t_middle_encoder_all))
+        self.t_backbone_all.append(t_backbone)
+        print('t_backbone_mean: ', sum(self.t_backbone_all)/len(self.t_backbone_all))
+        self.t_neck_all.append(t_neck)
+        print('t_neck_mean: ', sum(self.t_neck_all)/len(self.t_neck_all))
         return x
 
     @torch.no_grad()
@@ -97,14 +152,44 @@ class VoxelNet(SingleStage3DDetector):
 
     def simple_test(self, points, img_metas, imgs=None, rescale=False):
         """Test function without augmentaiton."""
+        torch.cuda.synchronize()
+        t0 = time.time()
         x = self.extract_feat(points, img_metas)
+
+        torch.cuda.synchronize()
+        t1 = time.time()
         outs = self.bbox_head(x)
+
+        torch.cuda.synchronize()
+        t2 = time.time()
         bbox_list = self.bbox_head.get_bboxes(
             *outs, img_metas, rescale=rescale)
+
+        torch.cuda.synchronize()
+        t3 = time.time()
         bbox_results = [
             bbox3d2result(bboxes, scores, labels)
             for bboxes, scores, labels in bbox_list
         ]
+
+        torch.cuda.synchronize()
+        t4 = time.time()
+
+        t_extract_feat = (t1-t0)*1000
+        t_bbox_head = (t2-t1)*1000
+        t_get_bboxes = (t3-t2)*1000
+        t_bbox3d2result = (t4-t3)*1000
+        self.t_extract_feat_all.append(t_extract_feat)
+        self.t_bbox_head_all.append(t_bbox_head)
+        self.t_get_bboxes_all.append(t_get_bboxes)
+        self.t_bbox3d2result_all.append(t_bbox3d2result)
+        try:
+            print('t_extract_feat_mean: ', sum(self.t_extract_feat_all[len(self.t_extract_feat_all)//2:])/(len(self.t_extract_feat_all)//2))
+            print('t_bbox_head_mean: ', sum(self.t_bbox_head_all[len(self.t_bbox_head_all)//2:])/(len(self.t_bbox_head_all)//2))
+            print('t_get_bboxes_mean: ', sum(self.t_get_bboxes_all[len(self.t_get_bboxes_all)//2:])/(len(self.t_get_bboxes_all)//2))
+            print('t_bbox3d2result_mean: ', sum(self.t_bbox3d2result_all[len(self.t_bbox3d2result_all)//2:])/(len(self.t_bbox3d2result_all)//2))
+        except ZeroDivisionError:
+            print(' ')
         return bbox_results
 
     def aug_test(self, points, img_metas, imgs=None, rescale=False):

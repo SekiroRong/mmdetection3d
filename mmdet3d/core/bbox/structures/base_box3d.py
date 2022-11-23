@@ -7,7 +7,8 @@ import torch
 from mmcv.ops import box_iou_rotated, points_in_boxes_all, points_in_boxes_part
 
 from .utils import limit_period
-
+import time
+from torch import cuda 
 
 class BaseInstance3DBoxes(object):
     """Base class for 3D Boxes.
@@ -37,10 +38,13 @@ class BaseInstance3DBoxes(object):
     """
 
     def __init__(self, tensor, box_dim=7, with_yaw=True, origin=(0.5, 0.5, 0)):
+        t0 = time.time()
         if isinstance(tensor, torch.Tensor):
             device = tensor.device
         else:
             device = torch.device('cpu')
+        # device = torch.device('cuda')
+        # print(device)
         tensor = torch.as_tensor(tensor, dtype=torch.float32, device=device)
         if tensor.numel() == 0:
             # Use reshape, so we don't end up creating a new tensor that
@@ -60,12 +64,19 @@ class BaseInstance3DBoxes(object):
         else:
             self.box_dim = box_dim
             self.with_yaw = with_yaw
+        # self.tensor = torch.zeros([100,7])
         self.tensor = tensor.clone()
+        self.tensor = self.tensor
+        # self.tensor = tensor
 
         if origin != (0.5, 0.5, 0):
             dst = self.tensor.new_tensor((0.5, 0.5, 0))
             src = self.tensor.new_tensor(origin)
             self.tensor[:, :3] += self.tensor[:, 3:6] * (dst - src)
+        t1 = time.time()
+        # print(self.tensor.size())
+        # self.indices = torch.tensor([0, 1, 3, 4, 6]).cuda()
+        # print('t_init_BaseInstance3DBoxes: ', (t1-t0)*1000)
 
     @property
     def volume(self):
@@ -138,6 +149,22 @@ class BaseInstance3DBoxes(object):
     def bev(self):
         """torch.Tensor: 2D BEV box of each box with rotation
             in XYWHR format, in shape (N, 5)."""
+        # print("cuda.memory_allocated: ", cuda.memory_allocated()/1024**2)
+        # self.tensor = self.tensor.contiguous()
+        # self.tensor = self.tensor.cpu().numpy()
+        # print(self.tensor.dtype)
+        # t0_0 = time.time()
+        # self.tensor = torch.zeros(100,7)
+        # print(self.tensor.size())
+        # t0 = time.time()
+        # print(self.tensor.size())
+        # b = torch.index_select(self.tensor, 1, self.indices)
+        # self.tensor = self.tensor[:, [0, 1, 3, 4, 6]]
+        # b = torch.from_numpy(b).cuda()
+        # t1 = time.time()
+        # print(self.tensor.size())
+        # print('t_torch.rand(100,7).cuda(): ', (t0-t0_0)*1000)
+        # print('t_to_bev: ', (t1-t0)*1000)
         return self.tensor[:, [0, 1, 3, 4, 6]]
 
     @property

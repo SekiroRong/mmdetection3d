@@ -6,7 +6,7 @@ from mmcv.runner import BaseModule, auto_fp16
 from torch import nn as nn
 
 from ..builder import NECKS
-
+import time
 
 @NECKS.register_module()
 class SECONDFPN(BaseModule):
@@ -81,6 +81,7 @@ class SECONDFPN(BaseModule):
         Returns:
             list[torch.Tensor]: Multi-level feature maps.
         """
+        t0 = time.time()
         assert len(x) == len(self.in_channels)
         ups = [deblock(x[i]) for i, deblock in enumerate(self.deblocks)]
 
@@ -88,4 +89,7 @@ class SECONDFPN(BaseModule):
             out = torch.cat(ups, dim=1)
         else:
             out = ups[0]
+        t1 = time.time()
+        # t = (t1-t0)*1000
+        # print(' t_SECONDFPN: ', t)
         return [out]

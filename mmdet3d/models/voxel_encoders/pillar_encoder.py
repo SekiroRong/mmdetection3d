@@ -7,7 +7,7 @@ from torch import nn
 
 from ..builder import VOXEL_ENCODERS
 from .utils import PFNLayer, get_paddings_indicator
-
+import time
 
 @VOXEL_ENCODERS.register_module()
 class PillarFeatureNet(nn.Module):
@@ -103,6 +103,7 @@ class PillarFeatureNet(nn.Module):
         Returns:
             torch.Tensor: Features of pillars.
         """
+        t0 = time.time()
         features_ls = [features]
         # Find distance of x, y, and z from cluster center
         if self._with_cluster_center:
@@ -155,7 +156,9 @@ class PillarFeatureNet(nn.Module):
 
         for pfn in self.pfn_layers:
             features = pfn(features, num_points)
-
+        t1 = time.time()
+        # t = (t1-t0)*1000
+        # print(' t_PillarFeatureNet: ', t)
         return features.squeeze(1)
 
 
@@ -320,4 +323,5 @@ class DynamicPillarFeatureNet(PillarFeatureNet):
                     coors, voxel_feats, voxel_coors)
                 features = torch.cat([point_feats, feat_per_point], dim=1)
 
+        # return features.squeeze(1)
         return voxel_feats, voxel_coors

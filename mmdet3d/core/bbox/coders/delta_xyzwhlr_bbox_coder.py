@@ -3,7 +3,7 @@ import torch
 
 from mmdet.core.bbox import BaseBBoxCoder
 from mmdet.core.bbox.builder import BBOX_CODERS
-
+import time
 
 @BBOX_CODERS.register_module()
 class DeltaXYZWLHRBBoxCoder(BaseBBoxCoder):
@@ -67,6 +67,7 @@ class DeltaXYZWLHRBBoxCoder(BaseBBoxCoder):
         Returns:
             torch.Tensor: Decoded boxes.
         """
+        t0 = time.time()
         cas, cts = [], []
         box_ndim = anchors.shape[-1]
         if box_ndim > 7:
@@ -88,4 +89,7 @@ class DeltaXYZWLHRBBoxCoder(BaseBBoxCoder):
         rg = rt + ra
         zg = zg - hg / 2
         cgs = [t + a for t, a in zip(cts, cas)]
+        t1 = time.time()
+        # t_DeltaXYZWLHRBBoxCoder = (t1-t0)*1000
+        # print('t_DeltaXYZWLHRBBoxCoder: ', t_DeltaXYZWLHRBBoxCoder)
         return torch.cat([xg, yg, zg, wg, lg, hg, rg, *cgs], dim=-1)

@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'KittiDataset'
-data_root = 'data/kitti/'
+data_root = '/mnt/d/kitti/'
 class_names = ['Car']
 point_cloud_range = [0, -40, -3, 70.4, 40, 1]
 input_modality = dict(use_lidar=True, use_camera=False)
@@ -19,6 +19,7 @@ file_client_args = dict(backend='disk')
 # file_client_args = dict(
 #     backend='petrel', path_mapping=dict(data='s3://kitti_data/'))
 
+pts_prefix='velodyne_reduced_full'
 train_pipeline = [
     dict(
         type='LoadPointsFromFile',
@@ -104,7 +105,7 @@ data = dict(
             data_root=data_root,
             ann_file=data_root + 'kitti_infos_train.pkl',
             split='training',
-            pts_prefix='velodyne_reduced',
+            pts_prefix=pts_prefix,
             pipeline=train_pipeline,
             modality=input_modality,
             classes=class_names,
@@ -117,7 +118,7 @@ data = dict(
         data_root=data_root,
         ann_file=data_root + 'kitti_infos_val.pkl',
         split='training',
-        pts_prefix='velodyne_reduced',
+        pts_prefix=pts_prefix,
         pipeline=test_pipeline,
         modality=input_modality,
         classes=class_names,
@@ -128,7 +129,7 @@ data = dict(
         data_root=data_root,
         ann_file=data_root + 'kitti_infos_val.pkl',
         split='training',
-        pts_prefix='velodyne_reduced',
+        pts_prefix=pts_prefix,
         pipeline=test_pipeline,
         modality=input_modality,
         classes=class_names,

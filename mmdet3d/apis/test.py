@@ -7,7 +7,7 @@ from mmcv.image import tensor2imgs
 
 from mmdet3d.models import (Base3DDetector, Base3DSegmentor,
                             SingleStageMono3DDetector)
-
+import time
 
 def single_gpu_test(model,
                     data_loader,
@@ -31,13 +31,22 @@ def single_gpu_test(model,
     Returns:
         list[dict]: The prediction results.
     """
+    t_alls = []
     model.eval()
     results = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
     for i, data in enumerate(data_loader):
+        torch.cuda.synchronize()
+        t0 = time.time()
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
+        torch.cuda.synchronize()
+        t1 = time.time()
+        t_all = (t1-t0)*1000
+        print(' t_all: ', t_all)
+        t_alls.append(t_all)
+        # torch.cuda.empty_cache()
 
         if show:
             # Visualize the results of MMDetection3D model
@@ -87,4 +96,9 @@ def single_gpu_test(model,
         batch_size = len(result)
         for _ in range(batch_size):
             prog_bar.update()
+
+    # t_alls = t_alls[100:]
+    t_mean = sum(t_alls[len(t_alls)//2:])/(len(t_alls)//2)
+    print('t_mean: ', t_mean)
+    print('FPS_mean', 1/t_mean * 1000)
     return results

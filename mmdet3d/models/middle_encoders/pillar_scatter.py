@@ -5,7 +5,7 @@ from torch import nn
 
 from ..builder import MIDDLE_ENCODERS
 
-
+import time
 @MIDDLE_ENCODERS.register_module()
 class PointPillarsScatter(nn.Module):
     """Point Pillar's Scatter.
@@ -69,6 +69,7 @@ class PointPillarsScatter(nn.Module):
             batch_size (int): Number of samples in the current batch.
         """
         # batch_canvas will be the final output.
+        t0 = time.time()
         batch_canvas = []
         for batch_itt in range(batch_size):
             # Create the canvas for this sample
@@ -98,5 +99,7 @@ class PointPillarsScatter(nn.Module):
         # Undo the column stacking to final 4-dim tensor
         batch_canvas = batch_canvas.view(batch_size, self.in_channels, self.ny,
                                          self.nx)
-
+        t1 = time.time()
+        # t = (t1-t0)*1000
+        # print(' t_scatter: ', t)
         return batch_canvas

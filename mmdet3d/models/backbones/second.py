@@ -6,8 +6,9 @@ from mmcv.runner import BaseModule
 from torch import nn as nn
 
 from ..builder import BACKBONES
+import time
 
-
+t_bb_all = []
 @BACKBONES.register_module()
 class SECOND(BaseModule):
     """Backbone network for SECOND/PointPillars/PartA2/MVXNet.
@@ -84,8 +85,14 @@ class SECOND(BaseModule):
         Returns:
             tuple[torch.Tensor]: Multi-scale features.
         """
+        t0 = time.time()
         outs = []
         for i in range(len(self.blocks)):
             x = self.blocks[i](x)
             outs.append(x)
+        t1 = time.time()
+        # t = (t1-t0)*1000
+        # # t_bb_all.append(t)
+        # print(' t_SECOND: ', t)
+        # print('t_Backbone_mean: ', sum(self.t_bb_all)/len(self.t_bb_all))
         return tuple(outs)

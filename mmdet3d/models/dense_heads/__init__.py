@@ -17,11 +17,16 @@ from .shape_aware_head import ShapeAwareHead
 from .smoke_mono3d_head import SMOKEMono3DHead
 from .ssd_3d_head import SSD3DHead
 from .vote_head import VoteHead
+from .detr3d_head import Detr3DHead
+from .dgcnn3d_head import DGCNN3DHead
+from .petr_head_seg import PETRHeadseg
+from .petr_head import PETRHead
 
 __all__ = [
     'Anchor3DHead', 'FreeAnchor3DHead', 'PartA2RPNHead', 'VoteHead',
     'SSD3DHead', 'BaseConvBboxHead', 'CenterHead', 'ShapeAwareHead',
     'BaseMono3DDenseHead', 'AnchorFreeMono3DHead', 'FCOSMono3DHead',
     'GroupFree3DHead', 'PointRPNHead', 'SMOKEMono3DHead', 'PGDHead',
-    'MonoFlexHead', 'FCAF3DHead', 'ImVoxelHead'
+    'MonoFlexHead', 'FCAF3DHead', 'ImVoxelHead', 'Detr3DHead', 'DGCNN3DHead',
+    'PETRHeadseg', 'PETRHead'
 ]

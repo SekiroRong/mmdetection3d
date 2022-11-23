@@ -6,10 +6,11 @@ from .multibin_loss import MultiBinLoss
 from .paconv_regularization_loss import PAConvRegularizationLoss
 from .rotated_iou_loss import RotatedIoU3DLoss
 from .uncertain_smooth_l1_loss import UncertainL1Loss, UncertainSmoothL1Loss
+from .Sigmoid_ce_loss import Sigmoid_ce_loss
 
 __all__ = [
     'FocalLoss', 'SmoothL1Loss', 'binary_cross_entropy', 'ChamferDistance',
     'chamfer_distance', 'axis_aligned_iou_loss', 'AxisAlignedIoULoss',
     'PAConvRegularizationLoss', 'UncertainL1Loss', 'UncertainSmoothL1Loss',
-    'MultiBinLoss', 'RotatedIoU3DLoss'
+    'MultiBinLoss', 'RotatedIoU3DLoss', 'Sigmoid_ce_loss'
 ]

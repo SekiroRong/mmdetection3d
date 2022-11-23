@@ -126,8 +126,8 @@ def show_result(points,
                              f'{filename}_online.png') if snapshot else None
         vis.show(show_path)
 
-    if points is not None:
-        _write_obj(points, osp.join(result_path, f'{filename}_points.obj'))
+    # if points is not None:
+    #     _write_obj(points, osp.join(result_path, f'{filename}_points.obj'))
 
     if gt_bboxes is not None:
         # bottom center to gravity center

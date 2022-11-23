@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from .assigners import AssignResult, BaseAssigner, MaxIoUAssigner
+from .assigners import AssignResult, BaseAssigner, MaxIoUAssigner, HungarianAssigner3D
 from .coders import DeltaXYZWLHRBBoxCoder
 # from .bbox_target import bbox_target
 from .iou_calculators import (AxisAlignedBboxOverlaps3D, BboxOverlaps3D,
@@ -16,6 +16,8 @@ from .structures import (BaseInstance3DBoxes, Box3DMode, CameraInstance3DBoxes,
                          xywhr2xyxyr)
 from .transforms import bbox3d2result, bbox3d2roi, bbox3d_mapping_back
 
+from .match_costs import BBox3DL1Cost
+
 __all__ = [
     'BaseSampler', 'AssignResult', 'BaseAssigner', 'MaxIoUAssigner',
     'PseudoSampler', 'RandomSampler', 'InstanceBalancedPosSampler',
@@ -26,5 +28,5 @@ __all__ = [
     'LiDARInstance3DBoxes', 'CameraInstance3DBoxes', 'bbox3d2roi',
     'bbox3d2result', 'DepthInstance3DBoxes', 'BaseInstance3DBoxes',
     'bbox3d_mapping_back', 'xywhr2xyxyr', 'limit_period', 'points_cam2img',
-    'points_img2cam', 'get_box_type', 'Coord3DMode', 'mono_cam_box2vis'
+    'points_img2cam', 'get_box_type', 'Coord3DMode', 'mono_cam_box2vis', 'BBox3DL1Cost'
 ]

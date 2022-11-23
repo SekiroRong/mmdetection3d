@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'KittiDataset'
-data_root = 'data/kitti/'
+data_root = '/mnt/d/kitti/'
 class_names = ['Pedestrian', 'Cyclist', 'Car']
 point_cloud_range = [0, -40, -3, 70.4, 40, 1]
 input_modality = dict(use_lidar=True, use_camera=False)
@@ -17,7 +17,7 @@ file_client_args = dict(backend='disk')
 #         'data/kitti/':
 #         's3://openmmlab/datasets/detection3d/kitti/'
 #     }))
-
+pts_prefix='velodyne_reduced_full'
 db_sampler = dict(
     data_root=data_root,
     info_path=data_root + 'kitti_dbinfos_train.pkl',
@@ -120,7 +120,7 @@ data = dict(
             data_root=data_root,
             ann_file=data_root + 'kitti_infos_train.pkl',
             split='training',
-            pts_prefix='velodyne_reduced',
+            pts_prefix=pts_prefix,
             pipeline=train_pipeline,
             modality=input_modality,
             classes=class_names,
@@ -134,7 +134,7 @@ data = dict(
         data_root=data_root,
         ann_file=data_root + 'kitti_infos_val.pkl',
         split='training',
-        pts_prefix='velodyne_reduced',
+        pts_prefix=pts_prefix,
         pipeline=test_pipeline,
         modality=input_modality,
         classes=class_names,
@@ -146,7 +146,7 @@ data = dict(
         data_root=data_root,
         ann_file=data_root + 'kitti_infos_val.pkl',
         split='training',
-        pts_prefix='velodyne_reduced',
+        pts_prefix=pts_prefix,
         pipeline=test_pipeline,
         modality=input_modality,
         classes=class_names,
@@ -154,4 +154,4 @@ data = dict(
         box_type_3d='LiDAR',
         file_client_args=file_client_args))
 
-evaluation = dict(interval=1, pipeline=eval_pipeline)
+evaluation = dict(interval=2, pipeline=eval_pipeline)

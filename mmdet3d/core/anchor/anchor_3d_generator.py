@@ -4,7 +4,7 @@ import torch
 
 from mmdet.core.anchor import ANCHOR_GENERATORS
 
-
+import time
 @ANCHOR_GENERATORS.register_module()
 class Anchor3DRangeGenerator(object):
     """3D Anchor Generator by range.
@@ -63,6 +63,10 @@ class Anchor3DRangeGenerator(object):
         self.cached_anchors = None
         self.reshape_out = reshape_out
         self.size_per_range = size_per_range
+        self.t_anchors = []
+        self.num_anchors = 0
+        # self.anchors = self.single_level_grid_anchors(
+        #         torch.Size([252, 220]), 1, device='cuda')
 
     def __repr__(self):
         s = self.__class__.__name__ + '('
@@ -102,14 +106,26 @@ class Anchor3DRangeGenerator(object):
                 are the sizes of the corresponding feature level,
                 num_base_anchors is the number of anchors for that level.
         """
+        # t0 = time.time()
         assert self.num_levels == len(featmap_sizes)
         multi_level_anchors = []
         for i in range(self.num_levels):
             anchors = self.single_level_grid_anchors(
                 featmap_sizes[i], self.scales[i], device=device)
+            # print(self.num_levels,featmap_sizes[i], self.scales[i],anchors[0][0][0][0])
             if self.reshape_out:
                 anchors = anchors.reshape(-1, anchors.size(-1))
             multi_level_anchors.append(anchors)
+        # multi_level_anchors.append(self.anchors)
+        # t1 = time.time()
+        # t_Anchor3DRangeGenerator = (t1-t0)*1000
+        # self.t_anchors.append(t_Anchor3DRangeGenerator)
+        # print('t_Anchor3DRangeGenerator: ', t_Anchor3DRangeGenerator)
+        # print('t_Anchor_mean: ', sum(self.t_anchors)/len(self.t_anchors))
+        # print('num_anchors_mean', self.num_anchors/len(self.t_anchors))
+        # anchors = self.anchors.clone()
+        # multi_level_anchors.append(anchors)
+        # return [self.anchors]
         return multi_level_anchors
 
     def single_level_grid_anchors(self, featmap_size, scale, device='cuda'):
@@ -150,6 +166,7 @@ class Anchor3DRangeGenerator(object):
                     self.rotations,
                     device=device))
         mr_anchors = torch.cat(mr_anchors, dim=-3)
+        # print(mr_anchors.shape)
         return mr_anchors
 
     def anchors_single_range(self,
@@ -211,7 +228,6 @@ class Anchor3DRangeGenerator(object):
 
         ret = torch.cat(rets, dim=-1).permute([2, 1, 0, 3, 4, 5])
         # [1, 200, 176, N, 2, 7] for kitti after permute
-
         if len(self.custom_values) > 0:
             custom_ndim = len(self.custom_values)
             custom = ret.new_zeros([*ret.shape[:-1], custom_ndim])
@@ -250,7 +266,7 @@ class AlignedAnchor3DRangeGenerator(Anchor3DRangeGenerator):
 
     def __init__(self, align_corner=False, **kwargs):
         super(AlignedAnchor3DRangeGenerator, self).__init__(**kwargs)
-        self.align_corner = align_corner
+        self.align_corner = False
 
     def anchors_single_range(self,
                              feature_size,
@@ -303,13 +319,13 @@ class AlignedAnchor3DRangeGenerator(Anchor3DRangeGenerator):
         rotations = torch.tensor(rotations, device=device)
 
         # shift the anchor center
-        if not self.align_corner:
-            z_shift = (z_centers[1] - z_centers[0]) / 2
-            y_shift = (y_centers[1] - y_centers[0]) / 2
-            x_shift = (x_centers[1] - x_centers[0]) / 2
-            z_centers += z_shift
-            y_centers += y_shift
-            x_centers += x_shift
+        # if not self.align_corner:
+        z_shift = (z_centers[1] - z_centers[0]) / 2
+        y_shift = (y_centers[1] - y_centers[0]) / 2
+        x_shift = (x_centers[1] - x_centers[0]) / 2
+        z_centers += z_shift
+        y_centers += y_shift
+        x_centers += x_shift
 
         # torch.meshgrid default behavior is 'id', np's default is 'xy'
         rets = torch.meshgrid(x_centers[:feature_size[2]],
@@ -338,7 +354,6 @@ class AlignedAnchor3DRangeGenerator(Anchor3DRangeGenerator):
             # custom[:] = self.custom_values
             ret = torch.cat([ret, custom], dim=-1)
         return ret
-
 
 @ANCHOR_GENERATORS.register_module()
 class AlignedAnchor3DRangeGeneratorPerCls(AlignedAnchor3DRangeGenerator):

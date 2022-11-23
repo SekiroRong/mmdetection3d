@@ -3,8 +3,9 @@ import numba
 import numpy as np
 import torch
 from mmcv.ops import nms, nms_rotated
+import time
 
-
+t_nms_all = []
 def box3d_multiclass_nms(mlvl_bboxes,
                          mlvl_bboxes_for_nms,
                          mlvl_scores,
@@ -43,6 +44,8 @@ def box3d_multiclass_nms(mlvl_bboxes,
     """
     # do multi class nms
     # the fg class id range: [0, num_classes-1]
+    torch.cuda.synchronize()
+    t0 = time.time()
     num_classes = mlvl_scores.shape[1] - 1
     bboxes = []
     scores = []
@@ -50,39 +53,65 @@ def box3d_multiclass_nms(mlvl_bboxes,
     dir_scores = []
     attr_scores = []
     bboxes2d = []
+    # print(mlvl_scores.shape)
     for i in range(0, num_classes):
         # get bboxes and scores of this class
+        # print('LLLLLLLLLLL')
+        t_0_0_0 = time.time()
         cls_inds = mlvl_scores[:, i] > score_thr
-        if not cls_inds.any():
-            continue
+        torch.cuda.synchronize()
+        t_0_0_1 = time.time()
+        # print('t_score_thr', (t_0_0_1-t_0_0_0)*1000)
+        s = cls_inds.any()
+        # s = torch.isnan(torch.nonzero(cls_inds))
+        # print(cls_inds)
+        # s = s.clone()
+        # print(s)
+        torch.cuda.synchronize()
+        t_0_0_2_0 = time.time()
+        # print('t_cpu', (t_0_0_2_0-t_0_0_1)*1000)
+        if s:
+            t_0_0_2 = time.time()
+            # print('t_any', (t_0_0_2-t_0_0_1)*1000)
+            # continue
 
-        _scores = mlvl_scores[cls_inds, i]
-        _bboxes_for_nms = mlvl_bboxes_for_nms[cls_inds, :]
+            _scores = mlvl_scores[cls_inds, i]
+            _bboxes_for_nms = mlvl_bboxes_for_nms[cls_inds, :]
 
-        if cfg.use_rotate_nms:
-            nms_func = nms_bev
-        else:
-            nms_func = nms_normal_bev
+            if cfg.use_rotate_nms:
+                nms_func = nms_bev
+            else:
+                nms_func = nms_normal_bev
 
-        selected = nms_func(_bboxes_for_nms, _scores, cfg.nms_thr)
-        _mlvl_bboxes = mlvl_bboxes[cls_inds, :]
-        bboxes.append(_mlvl_bboxes[selected])
-        scores.append(_scores[selected])
-        cls_label = mlvl_bboxes.new_full((len(selected), ),
-                                         i,
-                                         dtype=torch.long)
-        labels.append(cls_label)
+            
+            t_0_0_1 = time.time()
+            selected = nms_func(_bboxes_for_nms, _scores, cfg.nms_thr)
+            t_0_0_2 = time.time()
+            # print('t_nms_func__1', (t_0_0_1-t_0_0_0)*1000)
+            # print('t_nms_func', (t_0_0_2-t_0_0_1)*1000)
+            _mlvl_bboxes = mlvl_bboxes[cls_inds, :]
+            bboxes.append(_mlvl_bboxes[selected])
+            scores.append(_scores[selected])
+            cls_label = mlvl_bboxes.new_full((len(selected), ),
+                                            i,
+                                            dtype=torch.long)
+            labels.append(cls_label)
+            t_0_0_3 = time.time()
+            # print('t_new_full', (t_0_0_3-t_0_0_2)*1000)
 
-        if mlvl_dir_scores is not None:
-            _mlvl_dir_scores = mlvl_dir_scores[cls_inds]
-            dir_scores.append(_mlvl_dir_scores[selected])
-        if mlvl_attr_scores is not None:
-            _mlvl_attr_scores = mlvl_attr_scores[cls_inds]
-            attr_scores.append(_mlvl_attr_scores[selected])
-        if mlvl_bboxes2d is not None:
-            _mlvl_bboxes2d = mlvl_bboxes2d[cls_inds]
-            bboxes2d.append(_mlvl_bboxes2d[selected])
-
+            if mlvl_dir_scores is not None:
+                _mlvl_dir_scores = mlvl_dir_scores[cls_inds]
+                dir_scores.append(_mlvl_dir_scores[selected])
+            if mlvl_attr_scores is not None:
+                _mlvl_attr_scores = mlvl_attr_scores[cls_inds]
+                attr_scores.append(_mlvl_attr_scores[selected])
+            if mlvl_bboxes2d is not None:
+                _mlvl_bboxes2d = mlvl_bboxes2d[cls_inds]
+                bboxes2d.append(_mlvl_bboxes2d[selected])
+            t_0_0_4 = time.time()
+    #         print('t_ifss', (t_0_0_4-t_0_0_3)*1000)
+    # t_0_0 = time.time()
+    # print('t_nms_class', (t_0_0-t0)*1000)
     if bboxes:
         bboxes = torch.cat(bboxes, dim=0)
         scores = torch.cat(scores, dim=0)
@@ -117,6 +146,8 @@ def box3d_multiclass_nms(mlvl_bboxes,
             bboxes2d = mlvl_scores.new_zeros((0, 4))
 
     results = (bboxes, scores, labels)
+    t_0_1 = time.time()
+    # print('t_if_bbox', (t_0_1-t_0_0)*1000)
 
     if mlvl_dir_scores is not None:
         results = results + (dir_scores, )
@@ -124,7 +155,12 @@ def box3d_multiclass_nms(mlvl_bboxes,
         results = results + (attr_scores, )
     if mlvl_bboxes2d is not None:
         results = results + (bboxes2d, )
-
+    # torch.cuda.synchronize()
+    # t1 = time.time()
+    # t = (t1-t0)*1000
+    # t_nms_all.append(t)
+    # print(' t_nms: ', t)
+    # print('t_nms_mean: ', sum(t_nms_all)/len(t_nms_all))
     return results
 
 
@@ -247,6 +283,7 @@ def nms_bev(boxes, scores, thresh, pre_max_size=None, post_max_size=None):
     Returns:
         torch.Tensor: Indexes after NMS.
     """
+    # t0 = time.time()
     assert boxes.size(1) == 5, 'Input boxes shape should be [N, 5]'
     order = scores.sort(0, descending=True)[1]
     if pre_max_size is not None:
@@ -265,6 +302,9 @@ def nms_bev(boxes, scores, thresh, pre_max_size=None, post_max_size=None):
     keep = order[keep]
     if post_max_size is not None:
         keep = keep[:post_max_size]
+    # t1 = time.time()
+    # t = (t1-t0)*1000
+    # print(' t_nms: ', t)
     return keep
 
 

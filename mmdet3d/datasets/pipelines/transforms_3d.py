@@ -15,6 +15,8 @@ from mmdet.datasets.pipelines import RandomCrop, RandomFlip, Rotate
 from ..builder import OBJECTSAMPLERS, PIPELINES
 from .data_augment_utils import noise_per_object_v3_
 
+from PIL import Image
+import mmcv
 
 @PIPELINES.register_module()
 class RandomDropPointsColor(object):
@@ -587,8 +589,27 @@ class ObjectNoise(object):
             global_random_rot_range=self.global_rot_range,
             num_try=self.num_try)
 
+        points_ = input_dict['points'].tensor.numpy()
+
+
         input_dict['gt_bboxes_3d'] = gt_bboxes_3d.new_box(numpy_box)
-        input_dict['points'] = points.new_point(numpy_points)
+        # gt_bboxes_3d = input_dict['gt_bboxes_3d'].tensor.numpy()
+        # num_obj = gt_bboxes_3d.shape[0]
+        # # print(gt_bboxes_3d)
+        # gt_bboxes_3d[:,2] += 0.5
+        # gt_bboxes_3d[:,5] -= 0.5
+        # point_indices = box_np_ops.points_in_rbbox(points_, gt_bboxes_3d)
+        # gt_points = []
+        # for i in range(num_obj):
+        #     if not len(gt_points):
+        #         gt_points=points_[point_indices[:, i]]
+        #     else:
+        #         gt_points = np.vstack((gt_points,points_[point_indices[:, i]]))
+
+        # points = LiDARPoints(torch.from_numpy(gt_points), points_dim=4)
+
+        # input_dict['points'] = points
+        # input_dict['gt_bboxes_3d'] = LiDARInstance3DBoxes(torch.from_numpy(gt_bboxes_3d))
         return input_dict
 
     def __repr__(self):
@@ -598,6 +619,60 @@ class ObjectNoise(object):
         repr_str += f' translation_std={self.translation_std},'
         repr_str += f' global_rot_range={self.global_rot_range},'
         repr_str += f' rot_range={self.rot_range})'
+        return repr_str
+
+
+@PIPELINES.register_module()
+class ObjectMosaic(object):
+    """Apply noise to each GT objects in the scene.
+
+    Args:
+        translation_std (list[float], optional): Standard deviation of the
+            distribution where translation noise are sampled from.
+            Defaults to [0.25, 0.25, 0.25].
+        global_rot_range (list[float], optional): Global rotation to the scene.
+            Defaults to [0.0, 0.0].
+        rot_range (list[float], optional): Object rotation range.
+            Defaults to [-0.15707963267, 0.15707963267].
+        num_try (int, optional): Number of times to try if the noise applied is
+            invalid. Defaults to 100.
+    """
+
+    def __init__(self, height_remove = 0.1):
+        self.height_remove = height_remove
+
+    def __call__(self, input_dict):
+        """Call function to apply noise to each ground truth in the scene.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Results after adding noise to each object,
+                'points', 'gt_bboxes_3d' keys are updated in the result dict.
+        """
+        points_ = input_dict['points'].tensor.numpy()
+
+        gt_bboxes_3d = input_dict['gt_bboxes_3d'].tensor.numpy()
+        num_obj = gt_bboxes_3d.shape[0]
+        # print(gt_bboxes_3d)
+        gt_bboxes_3d[:,2] += self.height_remove
+        gt_bboxes_3d[:,5] -= self.height_remove
+        point_indices = box_np_ops.points_in_rbbox(points_, gt_bboxes_3d)
+        gt_points = []
+        for i in range(num_obj):
+            if not len(gt_points):
+                gt_points=points_[point_indices[:, i]]
+            else:
+                gt_points = np.vstack((gt_points,points_[point_indices[:, i]]))
+
+        input_dict['points'] = LiDARPoints(torch.from_numpy(gt_points), points_dim=4)
+        return input_dict
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(height_remove={self.height_remove},'
         return repr_str
 
 
@@ -1851,3 +1926,575 @@ class RandomShiftScale(object):
         repr_str += f'(shift_scale={self.shift_scale}, '
         repr_str += f'aug_prob={self.aug_prob}) '
         return repr_str
+
+from mmdet3d.core.bbox import box_np_ops as box_np_ops
+import torch
+from mmdet3d.core.points.lidar_points import LiDARPoints
+
+@PIPELINES.register_module()
+class ExtractGTpointsFilter(object):
+    """Extract only gt points.
+
+    Warning:
+        Training speed will drop around 20% compared to raw pointcloud
+
+        And not support for testing for now!!!
+    """
+
+    def __init__(self, ):
+        do_nothing = 1
+
+    def __call__(self, input_dict):
+        """Call function to Extract only gt points.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            input_dict (dict): Result dict from loading pipeline.
+        """
+        # print(input_dict['points'])
+        points = input_dict['points'].tensor.numpy()
+        gt_bboxes_3d = input_dict['gt_bboxes_3d'].tensor.numpy()
+        num_obj = gt_bboxes_3d.shape[0]
+        # print(gt_bboxes_3d)
+
+        point_indices = box_np_ops.points_in_rbbox(points, gt_bboxes_3d)
+
+        gt_points = []
+        for i in range(num_obj):
+            if not len(gt_points):
+                gt_points=points[point_indices[:, i]]
+            else:
+                gt_points = np.vstack((gt_points,points[point_indices[:, i]]))
+            # print(gt_points)
+
+        input_dict['points'] = LiDARPoints(torch.from_numpy(gt_points), points_dim=4)
+        # print(input_dict['points'].device)
+        return input_dict
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        return repr_str
+
+import numpy as np
+
+@PIPELINES.register_module()
+class ExtractGTpointsFilterWithRandomPaste(object):
+    """Extract only gt points.
+
+    Warning:
+        Training speed will drop around 20% compared to raw pointcloud
+    """
+
+    def __init__(self, max_paste_num=40):
+        self.possible_range = [0, -39.68, -2.73, 69.12, 39.68, 2.73]
+        self.max_paste_num = max_paste_num
+        self.possible_shape = np.tile([[0.8, 0.6, 6], [1.76, 0.6, 6], [3.9, 1.6, 6]],(self.max_paste_num,1))
+
+    def __call__(self, input_dict):
+        """Call function to Extract only gt points.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            input_dict (dict): Result dict from loading pipeline.
+        """
+        # print(input_dict['points'])
+        points = input_dict['points'].tensor.numpy()
+        gt_bboxes_3d = input_dict['gt_bboxes_3d'].tensor.numpy()
+        # print(gt_bboxes_3d)
+        num_obj = gt_bboxes_3d.shape[0]
+        # print(points)
+
+        # Generate fake bbox to extract noisy pointclouds
+        # paste_bboxes_shape = np.random.choice(self.possible_shape, self.max_paste_num)
+        bbox_type = np.random.randint(low=0,high=3,size=(self.max_paste_num,1))
+        paste_bboxes_shape = self.possible_shape[bbox_type[:],:].reshape(-1,3)
+        paste_bboxes_location_x = np.random.uniform(self.possible_range[0], self.possible_range[3],(self.max_paste_num,1))
+        paste_bboxes_location_y = np.random.uniform(self.possible_range[1], self.possible_range[4],(self.max_paste_num,1))
+        paste_bboxes_location = np.hstack((paste_bboxes_location_x,paste_bboxes_location_y,-3*np.ones((self.max_paste_num,1))))
+        paste_bboxes_3d = np.hstack((paste_bboxes_location,paste_bboxes_shape,np.random.randn(self.max_paste_num,1)))
+
+        gt_bboxes_3d = np.vstack((gt_bboxes_3d,paste_bboxes_3d))
+        num_obj = gt_bboxes_3d.shape[0]
+
+        point_indices = box_np_ops.points_in_rbbox(points, gt_bboxes_3d)
+
+        gt_points = []
+        for i in range(num_obj):
+            if not len(gt_points):
+                gt_points=points[point_indices[:, i]]
+            else:
+                gt_points = np.vstack((gt_points,points[point_indices[:, i]]))
+
+        input_dict['points'] = LiDARPoints(torch.from_numpy(gt_points), points_dim=4)
+
+        return input_dict
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(max_paste_num={self.max_paste_num},'
+        return repr_str
+
+@PIPELINES.register_module()
+class PointRandomSample(object):
+    """Point sample.
+
+    Sampling data to a certain number.
+
+    Args:
+        num_points (int): Number of points to be sampled.
+        sample_range (float, optional): The range where to sample points.
+            If not None, the points with depth larger than `sample_range` are
+            prior to be sampled. Defaults to None.
+        replace (bool, optional): Whether the sampling is with or without
+            replacement. Defaults to False.
+    """
+
+    def __init__(self, Sample_possibility = (0.3, 1.0), sample_range=None, replace=False):
+        self.Sample_possibility = Sample_possibility
+        # self.num_points = num_points
+        self.sample_range = sample_range
+        self.replace = replace
+
+    def _points_random_sampling(self,
+                                points,
+                                Sample_possibility,
+                                sample_range=None,
+                                replace=False,
+                                return_choices=False):
+        """Points random sampling.
+
+        Sample points to a certain number.
+
+        Args:
+            points (np.ndarray | :obj:`BasePoints`): 3D Points.
+            num_samples (int): Number of samples to be sampled.
+            sample_range (float, optional): Indicating the range where the
+                points will be sampled. Defaults to None.
+            replace (bool, optional): Sampling with or without replacement.
+                Defaults to None.
+            return_choices (bool, optional): Whether return choice.
+                Defaults to False.
+        Returns:
+            tuple[np.ndarray] | np.ndarray:
+                - points (np.ndarray | :obj:`BasePoints`): 3D Points.
+                - choices (np.ndarray, optional): The generated random samples.
+        """
+        assert Sample_possibility[0] < Sample_possibility[1]
+        possibility = random.uniform(Sample_possibility[0], Sample_possibility[1])
+        num_samples = int(points.shape[0] * possibility)
+        if not replace:
+            replace = (points.shape[0] < num_samples)
+        point_range = range(len(points))
+        if sample_range is not None and not replace:
+            # Only sampling the near points when len(points) >= num_samples
+            dist = np.linalg.norm(points.tensor, axis=1)
+            far_inds = np.where(dist >= sample_range)[0]
+            near_inds = np.where(dist < sample_range)[0]
+            # in case there are too many far points
+            if len(far_inds) > num_samples:
+                far_inds = np.random.choice(
+                    far_inds, num_samples, replace=False)
+            point_range = near_inds
+            num_samples -= len(far_inds)
+        choices = np.random.choice(point_range, num_samples, replace=replace)
+        if sample_range is not None and not replace:
+            choices = np.concatenate((far_inds, choices))
+            # Shuffle points after sampling
+            np.random.shuffle(choices)
+        if return_choices:
+            return points[choices], choices
+        else:
+            return points[choices]
+
+    def __call__(self, results):
+        """Call function to sample points to in indoor scenes.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Results after sampling, 'points', 'pts_instance_mask'
+                and 'pts_semantic_mask' keys are updated in the result dict.
+        """
+        points = results['points']
+        points, choices = self._points_random_sampling(
+            points,
+            self.Sample_possibility,
+            self.sample_range,
+            self.replace,
+            return_choices=True)
+        results['points'] = points
+
+        pts_instance_mask = results.get('pts_instance_mask', None)
+        pts_semantic_mask = results.get('pts_semantic_mask', None)
+
+        if pts_instance_mask is not None:
+            pts_instance_mask = pts_instance_mask[choices]
+            results['pts_instance_mask'] = pts_instance_mask
+
+        if pts_semantic_mask is not None:
+            pts_semantic_mask = pts_semantic_mask[choices]
+            results['pts_semantic_mask'] = pts_semantic_mask
+
+        return results
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(Sample_possibility={self.Sample_possibility},'
+        repr_str += f' sample_range={self.sample_range},'
+        repr_str += f' replace={self.replace})'
+
+        return repr_str
+
+import os
+@PIPELINES.register_module()
+class RemoveStableObj(object):
+    """Remove Stable Objects.
+
+    Warning:
+        Training speed will drop around 20% compared to raw pointcloud
+    """
+
+    def __init__(self ):
+        do_nothing = 1
+
+    def __call__(self, input_dict):
+        """Call function to Remove Stable Objects.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            input_dict (dict): Result dict from loading pipeline.
+        """
+        # print(input_dict)
+
+        img_path = input_dict['img_info']['filename']
+        # print(img_path)
+        obj_idx = img_path.split('/')[-1][:-4]
+        # print(obj_idx)
+        save_path = os.path.join('/mnt/g/KITTI_3D_new/training/velodyne_stable',obj_idx+'.bin')
+        # print(save_path)
+        points = input_dict['points'].tensor.numpy()
+        gt_bboxes_3d = input_dict['gt_bboxes_3d'].tensor.numpy()
+        gt_bboxes_3d[:,2] = -3
+        gt_bboxes_3d[:,5] = 6
+        # print(points.shape)
+        
+        num_obj = gt_bboxes_3d.shape[0]
+        # print(num_obj)
+
+        all_indices = np.ones((points.shape[0]))
+
+        point_indices = box_np_ops.points_in_rbbox(points, gt_bboxes_3d)
+
+        point_indices = np.sum(point_indices,axis=1).squeeze()
+        # print(point_indices.shape)
+
+        # point_indices = point_indices[:]>0.5
+        # print(point_indices)
+        # all_indices = all_indices[:]>0.5
+
+        remain_indices = all_indices-point_indices
+        # print(remain_indices.shape)
+        remain_indices = remain_indices > 0.5
+        # print(remain_indices)
+        # gt_points = []
+        # for i in range(num_obj):
+        #     if not len(gt_points):
+        #         gt_points=points[point_indices[:, i]]
+        #     else:
+        #         gt_points = np.vstack((gt_points,points[point_indices[:, i]]))
+        
+        remain_points = points[remain_indices]
+
+        # remain_points.astype(np.float32).tofile(save_path)
+        # print(remain_points.shape)
+        
+        input_dict['points'] = LiDARPoints(torch.from_numpy(remain_points), points_dim=4)
+        # print(input_dict['points'].device)
+        return input_dict
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        return repr_str
+
+@PIPELINES.register_module()
+class ResizeCropFlipImage(object):
+    """Random resize, Crop and flip the image
+    Args:
+        size (tuple, optional): Fixed padding size.
+    """
+
+    def __init__(self, data_aug_conf=None, training=True):
+        self.data_aug_conf = data_aug_conf
+        self.training = training
+
+    def __call__(self, results):
+        """Call function to pad images, masks, semantic segmentation maps.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Updated result dict.
+        """
+
+        imgs = results["img"]
+        N = len(imgs)
+        new_imgs = []
+        resize, resize_dims, crop, flip, rotate = self._sample_augmentation()
+        for i in range(N):
+            img = Image.fromarray(np.uint8(imgs[i]))
+            # augmentation (resize, crop, horizontal flip, rotate)
+            # resize, resize_dims, crop, flip, rotate = self._sample_augmentation()  ###different view use different aug (BEV Det)
+            img, ida_mat = self._img_transform(
+                img,
+                resize=resize,
+                resize_dims=resize_dims,
+                crop=crop,
+                flip=flip,
+                rotate=rotate,
+            )
+            new_imgs.append(np.array(img).astype(np.float32))
+            results['intrinsics'][i][:3, :3] = ida_mat @ results['intrinsics'][i][:3, :3]
+
+        results["img"] = new_imgs
+        results['lidar2img'] = [results['intrinsics'][i] @ results['extrinsics'][i].T for i in range(len(results['extrinsics']))]
+
+        return results
+
+    def _get_rot(self, h):
+
+        return torch.Tensor(
+            [
+                [np.cos(h), np.sin(h)],
+                [-np.sin(h), np.cos(h)],
+            ]
+        )
+
+    def _img_transform(self, img, resize, resize_dims, crop, flip, rotate):
+        ida_rot = torch.eye(2)
+        ida_tran = torch.zeros(2)
+        # adjust image
+        img = img.resize(resize_dims)
+        img = img.crop(crop)
+        if flip:
+            img = img.transpose(method=Image.FLIP_LEFT_RIGHT)
+        img = img.rotate(rotate)
+
+        # post-homography transformation
+        ida_rot *= resize
+        ida_tran -= torch.Tensor(crop[:2])
+        if flip:
+            A = torch.Tensor([[-1, 0], [0, 1]])
+            b = torch.Tensor([crop[2] - crop[0], 0])
+            ida_rot = A.matmul(ida_rot)
+            ida_tran = A.matmul(ida_tran) + b
+        A = self._get_rot(rotate / 180 * np.pi)
+        b = torch.Tensor([crop[2] - crop[0], crop[3] - crop[1]]) / 2
+        b = A.matmul(-b) + b
+        ida_rot = A.matmul(ida_rot)
+        ida_tran = A.matmul(ida_tran) + b
+        ida_mat = torch.eye(3)
+        ida_mat[:2, :2] = ida_rot
+        ida_mat[:2, 2] = ida_tran
+        return img, ida_mat
+
+    def _sample_augmentation(self):
+        H, W = self.data_aug_conf["H"], self.data_aug_conf["W"]
+        fH, fW = self.data_aug_conf["final_dim"]
+        if self.training:
+            resize = np.random.uniform(*self.data_aug_conf["resize_lim"])
+            resize_dims = (int(W * resize), int(H * resize))
+            newW, newH = resize_dims
+            crop_h = int((1 - np.random.uniform(*self.data_aug_conf["bot_pct_lim"])) * newH) - fH
+            crop_w = int(np.random.uniform(0, max(0, newW - fW)))
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+            flip = False
+            if self.data_aug_conf["rand_flip"] and np.random.choice([0, 1]):
+                flip = True
+            rotate = np.random.uniform(*self.data_aug_conf["rot_lim"])
+        else:
+            resize = max(fH / H, fW / W)
+            resize_dims = (int(W * resize), int(H * resize))
+            newW, newH = resize_dims
+            crop_h = int((1 - np.mean(self.data_aug_conf["bot_pct_lim"])) * newH) - fH
+            crop_w = int(max(0, newW - fW) / 2)
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+            flip = False
+            rotate = 0
+        return resize, resize_dims, crop, flip, rotate
+
+@PIPELINES.register_module()
+class GlobalRotScaleTransImage(object):
+    """Random resize, Crop and flip the image
+    Args:
+        size (tuple, optional): Fixed padding size.
+    """
+
+    def __init__(
+        self,
+        rot_range=[-0.3925, 0.3925],
+        scale_ratio_range=[0.95, 1.05],
+        translation_std=[0, 0, 0],
+        reverse_angle=False,
+        training=True,
+    ):
+
+        self.rot_range = rot_range
+        self.scale_ratio_range = scale_ratio_range
+        self.translation_std = translation_std
+
+        self.reverse_angle = reverse_angle
+        self.training = training
+
+    def __call__(self, results):
+        """Call function to pad images, masks, semantic segmentation maps.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Updated result dict.
+        """
+        # random rotate
+        rot_angle = np.random.uniform(*self.rot_range)
+
+        self.rotate_bev_along_z(results, rot_angle)
+        if self.reverse_angle:
+            rot_angle *= -1
+        results["gt_bboxes_3d"].rotate(
+            np.array(rot_angle)
+        )  
+
+        # random scale
+        scale_ratio = np.random.uniform(*self.scale_ratio_range)
+        self.scale_xyz(results, scale_ratio)
+        results["gt_bboxes_3d"].scale(scale_ratio)
+
+        # TODO: support translation
+
+        return results
+
+    def rotate_bev_along_z(self, results, angle):
+        rot_cos = torch.cos(torch.tensor(angle))
+        rot_sin = torch.sin(torch.tensor(angle))
+
+        rot_mat = torch.tensor([[rot_cos, -rot_sin, 0, 0], [rot_sin, rot_cos, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+        rot_mat_inv = torch.inverse(rot_mat)
+
+        num_view = len(results["lidar2img"])
+        for view in range(num_view):
+            results["lidar2img"][view] = (torch.tensor(results["lidar2img"][view]).float() @ rot_mat_inv).numpy()
+            results["extrinsics"][view] = (torch.tensor(results["extrinsics"][view]).float() @ rot_mat_inv).numpy()
+
+        return
+
+    def scale_xyz(self, results, scale_ratio):
+        rot_mat = torch.tensor(
+            [
+                [scale_ratio, 0, 0, 0],
+                [0, scale_ratio, 0, 0],
+                [0, 0, scale_ratio, 0],
+                [0, 0, 0, 1],
+            ]
+        )
+
+        rot_mat_inv = torch.inverse(rot_mat)
+
+        num_view = len(results["lidar2img"])
+        for view in range(num_view):
+            results["lidar2img"][view] = (torch.tensor(results["lidar2img"][view]).float() @ rot_mat_inv).numpy()
+            results["extrinsics"][view] = (torch.tensor(rot_mat_inv.T @ results["extrinsics"][view]).float()).numpy()
+        return
+
+@PIPELINES.register_module()
+class NormalizeMultiviewImage(object):
+    """Normalize the image.
+    Added key is "img_norm_cfg".
+    Args:
+        mean (sequence): Mean values of 3 channels.
+        std (sequence): Std values of 3 channels.
+        to_rgb (bool): Whether to convert the image from BGR to RGB,
+            default is true.
+    """
+
+    def __init__(self, mean, std, to_rgb=True):
+        self.mean = np.array(mean, dtype=np.float32)
+        self.std = np.array(std, dtype=np.float32)
+        self.to_rgb = to_rgb
+
+    def __call__(self, results):
+        """Call function to normalize images.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Normalized results, 'img_norm_cfg' key is added into
+                result dict.
+        """
+        results['img'] = [mmcv.imnormalize(
+            img, self.mean, self.std, self.to_rgb) for img in results['img']]
+        results['img_norm_cfg'] = dict(
+            mean=self.mean, std=self.std, to_rgb=self.to_rgb)
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(mean={self.mean}, std={self.std}, to_rgb={self.to_rgb})'
+        return repr_str
+
+@PIPELINES.register_module()
+class PadMultiViewImage(object):
+    """Pad the multi-view image.
+    There are two padding modes: (1) pad to a fixed size and (2) pad to the
+    minimum size that is divisible by some number.
+    Added keys are "pad_shape", "pad_fixed_size", "pad_size_divisor",
+    Args:
+        size (tuple, optional): Fixed padding size.
+        size_divisor (int, optional): The divisor of padded size.
+        pad_val (float, optional): Padding value, 0 by default.
+    """
+
+    def __init__(self, size=None, size_divisor=None, pad_val=0):
+        self.size = size
+        self.size_divisor = size_divisor
+        self.pad_val = pad_val
+        # only one of size and size_divisor should be valid
+        assert size is not None or size_divisor is not None
+        assert size is None or size_divisor is None
+
+    def _pad_img(self, results):
+        """Pad images according to ``self.size``."""
+        if self.size is not None:
+            padded_img = [mmcv.impad(
+                img, shape=self.size, pad_val=self.pad_val) for img in results['img']]
+        elif self.size_divisor is not None:
+            padded_img = [mmcv.impad_to_multiple(
+                img, self.size_divisor, pad_val=self.pad_val) for img in results['img']]
+        results['img_shape'] = [img.shape for img in results['img']]
+        results['img'] = padded_img
+        results['pad_shape'] = [img.shape for img in padded_img]
+        results['pad_fixed_size'] = self.size
+        results['pad_size_divisor'] = self.size_divisor
+
+    def __call__(self, results):
+        """Call function to pad images, masks, semantic segmentation maps.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Updated result dict.
+        """
+        self._pad_img(results)
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(size={self.size}, '
+        repr_str += f'size_divisor={self.size_divisor}, '
+        repr_str += f'pad_val={self.pad_val})'
+        return repr_str
+

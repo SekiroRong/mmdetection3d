@@ -10,7 +10,7 @@ from mmdet.core import (build_assigner, build_bbox_coder,
                         build_prior_generator, build_sampler, multi_apply)
 from ..builder import HEADS, build_loss
 from .train_mixins import AnchorTrainMixin
-
+import time
 
 @HEADS.register_module()
 class Anchor3DHead(BaseModule, AnchorTrainMixin):
@@ -107,6 +107,9 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
         self._init_layers()
         self._init_assigner_sampler()
 
+        self.t_bbox_all = []
+        self.t_anchor_head = []
+
         if init_cfg is None:
             self.init_cfg = dict(
                 type='Normal',
@@ -169,7 +172,14 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
             tuple[list[torch.Tensor]]: Multi-level class score, bbox
                 and direction predictions.
         """
-        return multi_apply(self.forward_single, feats)
+        t0 = time.time()
+        outputtt = multi_apply(self.forward_single, feats)
+        # t1 = time.time()
+        # t = (t1-t0)*1000
+        # print(' t_Anchor3DHead: ', t)
+        # self.t_anchor_head.append(t)
+        # print('t_Anchor3DHead_mean: ', sum(self.t_anchor_head)/len(self.t_anchor_head))
+        return outputtt
 
     def get_anchors(self, featmap_sizes, input_metas, device='cuda'):
         """Get anchors according to feature map sizes.
@@ -183,12 +193,16 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
             list[list[torch.Tensor]]: Anchors of each image, valid flags
                 of each image.
         """
+        # t0 = time.time()
         num_imgs = len(input_metas)
         # since feature map sizes of all images are the same, we only compute
         # anchors for one time
         multi_level_anchors = self.anchor_generator.grid_anchors(
             featmap_sizes, device=device)
         anchor_list = [multi_level_anchors for _ in range(num_imgs)]
+        # t1 = time.time()
+        # t = (t1-t0)*1000
+        # print(' t_get_anchors: ', t)
         return anchor_list
 
     def loss_single(self, cls_score, bbox_pred, dir_cls_preds, labels,
@@ -333,6 +347,7 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
                 - loss_dir (list[torch.Tensor]): Direction classification
                     losses.
         """
+        t0 = time.time()
         featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
         assert len(featmap_sizes) == self.anchor_generator.num_levels
         device = cls_scores[0].device
@@ -358,6 +373,7 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
             num_total_pos + num_total_neg if self.sampling else num_total_pos)
 
         # num_total_samples = None
+        # print(bbox_preds[0].size)
         losses_cls, losses_bbox, losses_dir = multi_apply(
             self.loss_single,
             cls_scores,
@@ -370,6 +386,8 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
             dir_targets_list,
             dir_weights_list,
             num_total_samples=num_total_samples)
+        # t1 = time.time()
+        # print('t_loss', (t1-t0)*1000)
         return dict(
             loss_cls=losses_cls, loss_bbox=losses_bbox, loss_dir=losses_dir)
 
@@ -394,16 +412,23 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
         Returns:
             list[tuple]: Prediction resultes of batches.
         """
+        torch.cuda.synchronize()
+        t0 = time.time()
         assert len(cls_scores) == len(bbox_preds)
         assert len(cls_scores) == len(dir_cls_preds)
         num_levels = len(cls_scores)
         featmap_sizes = [cls_scores[i].shape[-2:] for i in range(num_levels)]
         device = cls_scores[0].device
+        t1_0 = time.time()
         mlvl_anchors = self.anchor_generator.grid_anchors(
             featmap_sizes, device=device)
+        t1_1 = time.time()
+        # print('t_anchor_generator.grid_anchors', (t1_1-t1_0)*1000)
         mlvl_anchors = [
             anchor.reshape(-1, self.box_code_size) for anchor in mlvl_anchors
         ]
+        torch.cuda.synchronize()
+        t1 = time.time()
 
         result_list = []
         for img_id in range(len(input_metas)):
@@ -416,12 +441,24 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
             dir_cls_pred_list = [
                 dir_cls_preds[i][img_id].detach() for i in range(num_levels)
             ]
+            torch.cuda.synchronize()
+            t2 = time.time()
 
             input_meta = input_metas[img_id]
             proposals = self.get_bboxes_single(cls_score_list, bbox_pred_list,
                                                dir_cls_pred_list, mlvl_anchors,
                                                input_meta, cfg, rescale)
             result_list.append(proposals)
+        torch.cuda.synchronize()
+        t3 = time.time()
+        # t_bbox = (t3-t0)*1000
+        # t_bbox_anchor = (t1-t0)*1000
+        # t_bbox_detach = (t2-t1)*1000
+        # print(' t_get_bbox: ', t_bbox)
+        # print(' t_bbox_anchor: ', t_bbox_anchor)
+        # print(' t_bbox_detach: ', t_bbox_detach)
+        # self.t_bbox_all.append(t_bbox)
+        # print('t_bbox_mean: ', sum(self.t_bbox_all)/len(self.t_bbox_all))
         return result_list
 
     def get_bboxes_single(self,
@@ -452,8 +489,11 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
                 - scores (torch.Tensor): Class score of each bbox.
                 - labels (torch.Tensor): Label of each bbox.
         """
+        torch.cuda.synchronize()
+        t0 = time.time()
         cfg = self.test_cfg if cfg is None else cfg
         assert len(cls_scores) == len(bbox_preds) == len(mlvl_anchors)
+        # print(len(cls_scores))
         mlvl_bboxes = []
         mlvl_scores = []
         mlvl_dir_scores = []
@@ -472,6 +512,7 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
                 scores = cls_score.softmax(-1)
             bbox_pred = bbox_pred.permute(1, 2,
                                           0).reshape(-1, self.box_code_size)
+            # print(bbox_pred.size())
 
             nms_pre = cfg.get('nms_pre', -1)
             if nms_pre > 0 and scores.shape[0] > nms_pre:
@@ -484,28 +525,64 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
                 bbox_pred = bbox_pred[topk_inds, :]
                 scores = scores[topk_inds, :]
                 dir_cls_score = dir_cls_score[topk_inds]
-
+            # print(bbox_pred.size())
             bboxes = self.bbox_coder.decode(anchors, bbox_pred)
+            # print(bboxes.device)
             mlvl_bboxes.append(bboxes)
             mlvl_scores.append(scores)
             mlvl_dir_scores.append(dir_cls_score)
 
+        torch.cuda.synchronize()
+        t1 = time.time()
+        # print(mlvl_bboxes.size())
         mlvl_bboxes = torch.cat(mlvl_bboxes)
-        mlvl_bboxes_for_nms = xywhr2xyxyr(input_meta['box_type_3d'](
-            mlvl_bboxes, box_dim=self.box_code_size).bev)
+        # t2_1 = time.time()
+        # print(mlvl_bboxes.size())
+        # bev = self.my_bev(mlvl_bboxes, box_dim=self.box_code_size)
+        # print(bboxes.size())
+        # print(bboxes[:, 0].size())
+        # bev = torch.vstack((bboxes[:, 0] , bboxes[:, 1] , bboxes[:, 3] , bboxes[:, 4] , bboxes[:, 6])).t()
+        # print(bev.size())
+        # DB3 = input_meta['box_type_3d']
+        # t2_2_0_0 = time.time()
+        # initial_DB3 = DB3(mlvl_bboxes, box_dim=self.box_code_size)
+        # t2_2_0_1 = time.time()
+        # bev = initial_DB3.bev
+        # print(bev.is_contiguous())
+        # print(input_meta['box_type_3d'])
+        # t2_2_0 = time.time()
+        # print('t_bev', (t2_2_0-t2_1)*1000)
+        # print('t_DB3', (t2_2_0_0-t2_1)*1000)
+        # print('t_initial_DB3', (t2_2_0_1-t2_2_0_0)*1000)
+        # print('t_initial_DB3.bev', (t2_2_0-t2_2_0_1)*1000)
+        mlvl_bboxes_for_nms = xywhr2xyxyr(input_meta['box_type_3d'](mlvl_bboxes, box_dim=self.box_code_size).bev)
+        # print(mlvl_bboxes_for_nms)
+        # t2_2 = time.time()
+        # print('t_mlvl_bboxes_for_nms_only', (t2_2-t2_2_0)*1000)
         mlvl_scores = torch.cat(mlvl_scores)
+        # t2_3 = time.time()
         mlvl_dir_scores = torch.cat(mlvl_dir_scores)
+        torch.cuda.synchronize()
+        t2 = time.time()
+        # print('t_mlvl_bboxes', (t2_1-t1)*1000)
+        # print('t_mlvl_bboxes_for_nms', (t2_2-t2_1)*1000)
+        # print('t_mlvl_scores', (t2_3-t2_2)*1000)
+        # print('t_mlvl_dir_scores', (t2-t2_3)*1000)
 
         if self.use_sigmoid_cls:
             # Add a dummy background class to the front when using sigmoid
             padding = mlvl_scores.new_zeros(mlvl_scores.shape[0], 1)
             mlvl_scores = torch.cat([mlvl_scores, padding], dim=1)
+        torch.cuda.synchronize()
+        t3 = time.time()
 
         score_thr = cfg.get('score_thr', 0)
         results = box3d_multiclass_nms(mlvl_bboxes, mlvl_bboxes_for_nms,
                                        mlvl_scores, score_thr, cfg.max_num,
                                        cfg, mlvl_dir_scores)
         bboxes, scores, labels, dir_scores = results
+        torch.cuda.synchronize()
+        t4 = time.time()
         if bboxes.shape[0] > 0:
             dir_rot = limit_period(bboxes[..., 6] - self.dir_offset,
                                    self.dir_limit_offset, np.pi)
@@ -513,4 +590,42 @@ class Anchor3DHead(BaseModule, AnchorTrainMixin):
                 dir_rot + self.dir_offset +
                 np.pi * dir_scores.to(bboxes.dtype))
         bboxes = input_meta['box_type_3d'](bboxes, box_dim=self.box_code_size)
+        # print(bboxes)
+        torch.cuda.synchronize()
+        t5 = time.time()
+
+        # t_1 = (t1-t0)*1000
+        # t_2 = (t2-t1)*1000
+        # t_3 = (t3-t2)*1000
+        # t_4 = (t4-t3)*1000
+        # t_5 = (t5-t4)*1000
+        # print('t_1:', t_1)
+        # print('t_2:', t_2)
+        # print('t_3:', t_3)
+        # print('t_4:', t_4)
+        # print('t_5:', t_5)
+
         return bboxes, scores, labels
+
+    # def my_bev(self, tensor, box_dim=7, with_yaw=True, origin=(0.5, 0.5, 0)):
+    #     # tensor = torch.as_tensor(tensor, dtype=torch.float32, device='cuda')
+    #     # if tensor.numel() == 0:
+    #     #     # Use reshape, so we don't end up creating a new tensor that
+    #     #     # does not depend on the inputs (and consequently confuses jit)
+    #     #     tensor = tensor.reshape((0, box_dim)).to(
+    #     #         dtype=torch.float32, device=device)
+    #     assert tensor.dim() == 2 and tensor.size(-1) == box_dim, tensor.size()
+
+    #     # if tensor.shape[-1] == 6:
+    #     #     # If the dimension of boxes is 6, we expand box_dim by padding
+    #     #     # 0 as a fake yaw and set with_yaw to False.
+    #     #     assert box_dim == 6
+    #     #     fake_rot = tensor.new_zeros(tensor.shape[0], 1)
+    #     #     tensor = torch.cat((tensor, fake_rot), dim=-1)
+    #     #     box_dim = box_dim + 1
+    #     #     with_yaw = False
+    #     # else:
+    #     #     box_dim = box_dim
+    #     #     with_yaw = with_yaw
+    #     # self.tensor = torch.zeros([100,7])
+    #     return tensor[:, [0, 1, 3, 4, 6]]
