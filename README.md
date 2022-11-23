@@ -1,5 +1,9 @@
 # Change log -----SekiroRong
 
+* 2022.11.23
+
+Add part of PETR and PETRv2 implementation
+
 * 2022.11.16
 
 Redesigned config of SST and FSD for KITTI
