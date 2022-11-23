@@ -1,3 +1,39 @@
+# Change log -----SekiroRong
+
+* 2022.11.16
+
+Redesigned config of SST and FSD for KITTI
+
+* 2022.11.12
+
+Add Config of kitti version SST and FSD, and their implements can be found on https://github.com/tusen-ai/SST
+
+* 2022.11.01
+
+Add Data Augmentation of Extract GT points
+
+* 2022.10.23
+
+Add sparse pointpillar implementation
+
+```
+# You can modified the cmd by urself
+
+python tool/train.py config/sparse_pointpillars/*
+```
+
+* 2022.10.7
+
+Add Data Augmentation of PointRandomSample and PointsHeightFilter
+
+-----------------------------------------------------------------
+
+
+
+
+
+
+
 <div align="center">
   <img src="resources/mmdet3d-logo.png" width="600"/>
   <div>&nbsp;</div>

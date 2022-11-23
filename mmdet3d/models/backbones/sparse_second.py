@@ -90,10 +90,8 @@ class SparseSECOND(BaseModule):
         vals = x._values()
         idxs = x._indices().permute(1, 0).contiguous().int()
         x = ME.SparseTensor(vals, idxs)
-        # print(x.shape)
         outs = []
         for i in range(len(self.blocks)):
             x = self.blocks[i](x)
-            # print(x.shape)
             outs.append(x)
         return input_shape, self.layer_strides, tuple(outs)

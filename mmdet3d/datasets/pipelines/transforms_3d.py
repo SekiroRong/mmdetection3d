@@ -331,7 +331,6 @@ class RangeLimitedRandomCrop(RandomCrop):
 
         return results
 
-
 @PIPELINES.register_module()
 class RandomRotate(Rotate):
     """Randomly rotate images.
@@ -1057,6 +1056,51 @@ class PointsRangeFilter(object):
         repr_str += f'(point_cloud_range={self.pcd_range.tolist()})'
         return repr_str
 
+@PIPELINES.register_module()
+class PointsHeightFilter(object):
+    """Filter points by the Height.
+
+    Args:
+        point_cloud_Height (list[float]): Point cloud range.
+    """
+
+    def __init__(self, point_cloud_range):
+        random_height = random.uniform(-0.5, 1)
+        point_cloud_range[5] = random_height
+        self.pcd_range = np.array(point_cloud_range, dtype=np.float32)
+
+    def __call__(self, input_dict):
+        """Call function to filter points by the range.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Results after filtering, 'points', 'pts_instance_mask'
+                and 'pts_semantic_mask' keys are updated in the result dict.
+        """
+        points = input_dict['points']
+        points_mask = points.in_range_3d(self.pcd_range)
+        clean_points = points[points_mask]
+        input_dict['points'] = clean_points
+        points_mask = points_mask.numpy()
+
+        pts_instance_mask = input_dict.get('pts_instance_mask', None)
+        pts_semantic_mask = input_dict.get('pts_semantic_mask', None)
+
+        if pts_instance_mask is not None:
+            input_dict['pts_instance_mask'] = pts_instance_mask[points_mask]
+
+        if pts_semantic_mask is not None:
+            input_dict['pts_semantic_mask'] = pts_semantic_mask[points_mask]
+
+        return input_dict
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(point_cloud_range={self.pcd_range.tolist()})'
+        return repr_str
 
 @PIPELINES.register_module()
 class ObjectNameFilter(object):
@@ -1203,6 +1247,117 @@ class PointSample(object):
 
         return repr_str
 
+@PIPELINES.register_module()
+class PointRandomSample(object):
+    """Point sample.
+
+    Sampling data to a certain number.
+
+    Args:
+        num_points (int): Number of points to be sampled.
+        sample_range (float, optional): The range where to sample points.
+            If not None, the points with depth larger than `sample_range` are
+            prior to be sampled. Defaults to None.
+        replace (bool, optional): Whether the sampling is with or without
+            replacement. Defaults to False.
+    """
+
+    def __init__(self, Sample_possibility = (0.3, 1.0), sample_range=None, replace=False):
+        self.Sample_possibility = Sample_possibility
+        # self.num_points = num_points
+        self.sample_range = sample_range
+        self.replace = replace
+
+    def _points_random_sampling(self,
+                                points,
+                                Sample_possibility,
+                                sample_range=None,
+                                replace=False,
+                                return_choices=False):
+        """Points random sampling.
+
+        Sample points to a certain number.
+
+        Args:
+            points (np.ndarray | :obj:`BasePoints`): 3D Points.
+            num_samples (int): Number of samples to be sampled.
+            sample_range (float, optional): Indicating the range where the
+                points will be sampled. Defaults to None.
+            replace (bool, optional): Sampling with or without replacement.
+                Defaults to None.
+            return_choices (bool, optional): Whether return choice.
+                Defaults to False.
+        Returns:
+            tuple[np.ndarray] | np.ndarray:
+                - points (np.ndarray | :obj:`BasePoints`): 3D Points.
+                - choices (np.ndarray, optional): The generated random samples.
+        """
+        assert Sample_possibility[0] < Sample_possibility[1]
+        possibility = random.uniform(Sample_possibility[0], Sample_possibility[1])
+        num_samples = int(points.shape[0] * possibility)
+        if not replace:
+            replace = (points.shape[0] < num_samples)
+        point_range = range(len(points))
+        if sample_range is not None and not replace:
+            # Only sampling the near points when len(points) >= num_samples
+            dist = np.linalg.norm(points.tensor, axis=1)
+            far_inds = np.where(dist >= sample_range)[0]
+            near_inds = np.where(dist < sample_range)[0]
+            # in case there are too many far points
+            if len(far_inds) > num_samples:
+                far_inds = np.random.choice(
+                    far_inds, num_samples, replace=False)
+            point_range = near_inds
+            num_samples -= len(far_inds)
+        choices = np.random.choice(point_range, num_samples, replace=replace)
+        if sample_range is not None and not replace:
+            choices = np.concatenate((far_inds, choices))
+            # Shuffle points after sampling
+            np.random.shuffle(choices)
+        if return_choices:
+            return points[choices], choices
+        else:
+            return points[choices]
+
+    def __call__(self, results):
+        """Call function to sample points to in indoor scenes.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Results after sampling, 'points', 'pts_instance_mask'
+                and 'pts_semantic_mask' keys are updated in the result dict.
+        """
+        points = results['points']
+        points, choices = self._points_random_sampling(
+            points,
+            self.Sample_possibility,
+            self.sample_range,
+            self.replace,
+            return_choices=True)
+        results['points'] = points
+
+        pts_instance_mask = results.get('pts_instance_mask', None)
+        pts_semantic_mask = results.get('pts_semantic_mask', None)
+
+        if pts_instance_mask is not None:
+            pts_instance_mask = pts_instance_mask[choices]
+            results['pts_instance_mask'] = pts_instance_mask
+
+        if pts_semantic_mask is not None:
+            pts_semantic_mask = pts_semantic_mask[choices]
+            results['pts_semantic_mask'] = pts_semantic_mask
+
+        return results
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(Sample_possibility={self.Sample_possibility},'
+        repr_str += f' sample_range={self.sample_range},'
+        repr_str += f' replace={self.replace})'
+
+        return repr_str
 
 @PIPELINES.register_module()
 class IndoorPointSample(PointSample):
@@ -1465,6 +1620,52 @@ class IndoorPatchPointSample(object):
         repr_str += f' eps={self.eps})'
         return repr_str
 
+from mmdet3d.core.bbox import box_np_ops as box_np_ops
+import torch
+from mmdet3d.core.points.lidar_points import LiDARPoints
+
+@PIPELINES.register_module()
+class ExtractGTpointsFilter(object):
+    """Extract only gt points.
+    """
+
+    def __init__(self, ):
+        do_nothing = 1
+
+    def __call__(self, input_dict):
+        """Call function to Extract only gt points.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Results after filtering, 'points', 'pts_instance_mask'
+                and 'pts_semantic_mask' keys are updated in the result dict.
+        """
+        # print(input_dict['points'])
+        points = input_dict['points'].tensor.numpy()
+        gt_bboxes_3d = input_dict['gt_bboxes_3d'].tensor.numpy()
+        num_obj = gt_bboxes_3d.shape[0]
+        # print(gt_bboxes_3d)
+
+        point_indices = box_np_ops.points_in_rbbox(points, gt_bboxes_3d)
+
+        gt_points = []
+        for i in range(num_obj):
+            if not len(gt_points):
+                gt_points=points[point_indices[:, i]]
+            else:
+                gt_points = np.vstack((gt_points,points[point_indices[:, i]]))
+            # print(gt_points)
+
+        input_dict['points'] = LiDARPoints(torch.from_numpy(gt_points), points_dim=4)
+        # print(input_dict['points'].device)
+        return input_dict
+
+    def __repr__(self):
+        """str: Return a string that describes the module."""
+        repr_str = self.__class__.__name__
+        return repr_str
 
 @PIPELINES.register_module()
 class BackgroundPointsFilter(object):
@@ -2496,5 +2697,46 @@ class PadMultiViewImage(object):
         repr_str += f'(size={self.size}, '
         repr_str += f'size_divisor={self.size_divisor}, '
         repr_str += f'pad_val={self.pad_val})'
+      
+      
+@PIPELINES.register_module()
+class Insurance(object):
+    """Random shift scale.
+
+    Different from the normal shift and scale function, it doesn't
+    directly shift or scale image. It can record the shift and scale
+    infos into loading pipelines. It's designed to be used with
+    AffineResize together.
+
+    Args:
+        shift_scale (tuple[float]): Shift and scale range.
+        aug_prob (float): The shifting and scaling probability.
+    """
+
+    def __init__(self, pos = [[1.,.0,.0,1.0]]):
+
+        self.pos = pos
+
+    def __call__(self, input_dict):
+        """Call function to record random shift and scale infos.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Results after random shift and scale, 'center', 'size'
+                and 'affine_aug' keys are added in the result dict.
+        """
+        point = input_dict['points'].tensor.numpy()
+        if len(point) == 0:
+            fixed_points = np.array(self.pos)
+        else:
+            fixed_points = np.vstack((point,np.array(self.pos)))
+        input_dict['points'] = LiDARPoints(torch.from_numpy(fixed_points), points_dim=4)
+        return input_dict
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(pos={self.pos}, '
         return repr_str
 
