@@ -1,10 +1,8 @@
 _base_ = [
-    '../../../mmdetection3d/configs/_base_/datasets/nus-3d.py',
-    '../../../mmdetection3d/configs/_base_/default_runtime.py'
+    '../_base_/datasets/nus-3d.py',
+    '../_base_/default_runtime.py'
 ]
 backbone_norm_cfg = dict(type='LN', requires_grad=True)
-plugin=True
-plugin_dir='projects/mmdet3d_plugin/'
 
 # If point cloud range is changed, the models should also change their point
 # cloud range accordingly
@@ -113,7 +111,7 @@ model = dict(
             pc_range=point_cloud_range))))
 
 dataset_type = 'CustomNuScenesDataset'
-data_root = '/data/Dataset/nuScenes/'
+data_root = '/mnt/d/nus/v1.0-mini/'
 
 file_client_args = dict(backend='disk')
 db_sampler = dict()
