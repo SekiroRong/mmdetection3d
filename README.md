@@ -1,5 +1,9 @@
 # Change log -----SekiroRong
 
+* 2022.11.25
+
+Finish of PETR implementation
+
 * 2022.11.23
 
 Add part of PETR and PETRv2 implementation
