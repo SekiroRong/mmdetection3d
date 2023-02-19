@@ -10,6 +10,7 @@ from ..builder import DETECTORS
 from .single_stage import SingleStage3DDetector
 
 import time
+import numpy as np
 
 @DETECTORS.register_module()
 class VoxelNet(SingleStage3DDetector):
@@ -86,21 +87,20 @@ class VoxelNet(SingleStage3DDetector):
         t_backbone = (t4-t3)*1000
         t_neck = (t5-t4)*1000
         print(' ')
-        print(' t_voxelize: ', t_voxelize)
-        print(' t_voxel_encoder: ', t_voxel_encoder)
-        print(' t_middle_encoder: ', t_middle_encoder)
-        print(' t_backbone: ', t_backbone)
-        print(' t_neck: ', t_neck)
-        self.t_voxelize_all.append(t_voxelize)
         print('t_voxelize_mean: ', sum(self.t_voxelize_all)/len(self.t_voxelize_all))
+        # print('t_voxelize_std: ', np.std(np.array(self.t_voxelize_all[len(self.t_voxelize_all)//2:])))
         self.t_voxel_encoder_all.append(t_voxel_encoder)
         print('t_voxel_encoder_mean: ', sum(self.t_voxel_encoder_all)/len(self.t_voxel_encoder_all))
+        print('t_voxel_encoder_std: ', np.std(np.array(self.t_voxelize_all[len(self.t_voxelize_all)//2:]) +np.array(self.t_voxel_encoder_all[len(self.t_voxel_encoder_all)//2:])))
         self.t_middle_encoder_all.append(t_middle_encoder)
         print('t_middle_encoder_mean: ', sum(self.t_middle_encoder_all)/len(self.t_middle_encoder_all))
+        print('t_middle_encoder_std: ', np.std(np.array(self.t_middle_encoder_all[len(self.t_middle_encoder_all)//2:])))
         self.t_backbone_all.append(t_backbone)
         print('t_backbone_mean: ', sum(self.t_backbone_all)/len(self.t_backbone_all))
+        print('t_backbone_std: ', np.std(np.array(self.t_backbone_all[len(self.t_backbone_all)//2:])))
         self.t_neck_all.append(t_neck)
         print('t_neck_mean: ', sum(self.t_neck_all)/len(self.t_neck_all))
+        print('t_neck_std: ', np.std(np.array(self.t_neck_all[len(self.t_neck_all)//2:])))
         return x
 
     @torch.no_grad()
@@ -186,8 +186,11 @@ class VoxelNet(SingleStage3DDetector):
         try:
             print('t_extract_feat_mean: ', sum(self.t_extract_feat_all[len(self.t_extract_feat_all)//2:])/(len(self.t_extract_feat_all)//2))
             print('t_bbox_head_mean: ', sum(self.t_bbox_head_all[len(self.t_bbox_head_all)//2:])/(len(self.t_bbox_head_all)//2))
+            print('t_bbox_head_std: ', np.std(np.array(self.t_bbox_head_all[len(self.t_bbox_head_all)//2:])))
             print('t_get_bboxes_mean: ', sum(self.t_get_bboxes_all[len(self.t_get_bboxes_all)//2:])/(len(self.t_get_bboxes_all)//2))
+            # print('t_get_bboxes_std: ', np.std(np.array(self.t_get_bboxes_all[len(self.t_get_bboxes_all)//2:])))
             print('t_bbox3d2result_mean: ', sum(self.t_bbox3d2result_all[len(self.t_bbox3d2result_all)//2:])/(len(self.t_bbox3d2result_all)//2))
+            print('t_bbox3d2result_std: ', np.std(np.array(self.t_get_bboxes_all[len(self.t_get_bboxes_all)//2:]) + np.array(self.t_bbox3d2result_all[len(self.t_bbox3d2result_all)//2:])))
         except ZeroDivisionError:
             print(' ')
         return bbox_results
