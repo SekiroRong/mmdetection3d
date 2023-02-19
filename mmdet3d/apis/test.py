@@ -8,6 +8,7 @@ from mmcv.image import tensor2imgs
 from mmdet3d.models import (Base3DDetector, Base3DSegmentor,
                             SingleStageMono3DDetector)
 import time
+import numpy as np
 
 def single_gpu_test(model,
                     data_loader,
@@ -100,5 +101,7 @@ def single_gpu_test(model,
     # t_alls = t_alls[100:]
     t_mean = sum(t_alls[len(t_alls)//2:])/(len(t_alls)//2)
     print('t_mean: ', t_mean)
+    t_std = np.std(t_alls[len(t_alls)//2:])
+    print('t_std: ', t_std)
     print('FPS_mean', 1/t_mean * 1000)
     return results
