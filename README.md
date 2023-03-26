@@ -22,7 +22,7 @@ Add Data Augmentation of Extract GT points
 
 * 2022.10.23
 
-Add sparse pointpillar implementation
+Add [sparse pointpillar](https://vedder.io/publications/sparse_point_pillars_snn_workshop.pdf) implementation
 
 ```
 # You can modified the cmd by urself
