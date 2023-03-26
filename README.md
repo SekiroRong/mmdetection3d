@@ -2,7 +2,7 @@
 
 * 2023.01.05
 
-My implementation of [PETR](https://arxiv.org/abs/2203.05625) merge into [MMDetection3D](https://github.com/open-mmlab/mmdetection3d/pull/2175#event-8155893194)
+**My implementation of [PETR](https://arxiv.org/abs/2203.05625) merge into [MMDetection3D](https://github.com/open-mmlab/mmdetection3d/pull/2175#event-8155893194)** 🎉🎉🎉 
 
 * 2022.11.25
 
