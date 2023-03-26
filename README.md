@@ -1,24 +1,24 @@
 # Change log -----SekiroRong
 
+* 2023.01.05
+
+My implementation of [PETR](https://arxiv.org/abs/2203.05625) merge into [MMDetection3D](https://github.com/open-mmlab/mmdetection3d/pull/2175#event-8155893194)
+
 * 2022.11.25
 
-Finish of PETR implementation
-
-* 2022.11.23
-
-Add part of PETR and PETRv2 implementation
+Implement [PETR](https://arxiv.org/abs/2203.05625) and [PETRv2](https://arxiv.org/abs/2206.01256).
 
 * 2022.11.16
 
-Redesigned config of SST and FSD for KITTI
+Optimize the performance of SST and FSD on KITTI
 
 * 2022.11.12
 
-Add Config of kitti version SST and FSD, and their implements can be found on https://github.com/tusen-ai/SST
+Implement the kitti version [SST](https://arxiv.org/abs/2112.06375) and [FSD](https://arxiv.org/abs/2207.10035), their official nuscenes implements can be found on https://github.com/tusen-ai/SST
 
 * 2022.11.01
 
-Add Data Augmentation of Extract GT points
+Add Data Augmentation: Extract GT points
 
 * 2022.10.23
 
@@ -32,7 +32,7 @@ python tool/train.py config/sparse_pointpillars/*
 
 * 2022.10.7
 
-Add Data Augmentation of PointRandomSample and PointsHeightFilter
+Add Data Augmentation: PointRandomSamplez PointsHeightFilter
 
 -----------------------------------------------------------------
 
